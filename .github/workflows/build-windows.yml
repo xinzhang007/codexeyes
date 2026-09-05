@@ -1,0 +1,42 @@
+name: Build Windows app
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        runtime: [win-x64, win-arm64]
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.x
+
+      - name: Publish single-file app
+        shell: pwsh
+        run: |
+          dotnet publish windows/CodexEyes.csproj `
+            --configuration Release `
+            --runtime ${{ matrix.runtime }} `
+            --self-contained true `
+            --property:PublishSingleFile=true `
+            --property:IncludeNativeLibrariesForSelfExtract=true `
+            --output "dist/${{ matrix.runtime }}"
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: codexeyes-${{ matrix.runtime }}
+          path: dist/${{ matrix.runtime }}/codexeyes.exe

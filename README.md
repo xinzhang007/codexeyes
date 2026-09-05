@@ -51,6 +51,7 @@ cd codexeyes
 
 需要 macOS 13 或更高版本，以及 Xcode Command Line Tools（提供 `swiftc`）。本项目没有使用 Apple Developer 签名；如果系统提示未验证开发者，请在“应用程序”文件夹中右键点击 `codexeyes`，选择“打开”。
 
+
 ## Windows 安装
 
 Windows 版本是原生 WPF 应用。需要 Windows 10/11 和 .NET 8 SDK（只在构建时需要）。在 PowerShell 中从仓库根目录执行：
@@ -65,6 +66,12 @@ ARM64 Windows 设备：
 
 ```powershell
 .\windows\install.ps1 -Runtime win-arm64
+```
+
+如果 PowerShell 阻止脚本运行，可以只对当前窗口放宽限制：
+
+```powershell
+Set-ExecutionPolicy -Scope Process Bypass
 ```
 
 重新构建：
@@ -134,3 +141,13 @@ rm -rf /Applications/codexeyes.app
 ## 许可证
 
 本项目使用 [MIT License](LICENSE)。
+
+## English quick start
+
+`codexeyes` is a native desktop usage widget for Codex CLI on macOS and Windows. It reads usage records locally, refreshes automatically, and keeps a compact always-visible card on your desktop.
+
+- macOS: run `./native/install.sh`
+- Windows: run `.\windows\install.ps1` in PowerShell
+- Source, privacy notes, and uninstall steps are documented above.
+
+The demo image uses sample data. The app never needs your Codex session files in the repository.
