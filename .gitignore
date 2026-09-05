@@ -3,3 +3,6 @@
 *.tmp
 native/build/
 codexeyes.iconset/
+windows/bin/
+windows/obj/
+windows/publish/

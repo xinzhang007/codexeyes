@@ -2,20 +2,39 @@
   "id": "codex-usage-desktop",
   "name": "codexeyes",
   "version": "1.0.0",
-  "description": "在桌面实时查看 Codex 用量、额度和 Token 消耗。",
+  "description": "在 macOS 和 Windows 桌面实时查看 Codex 用量、额度和 Token 消耗。",
   "entry": "app/codexeyes.app",
   "runtime": "macOS",
   "display": "desktop-widget",
   "native": true,
-  "size": { "width": 260, "height": 285 },
+  "size": {
+    "width": 260,
+    "height": 285
+  },
   "layout": {
     "anchor": "top-right",
     "space": "all",
     "zIndex": "desktop",
     "collision": "avoid",
-    "margin": { "top": 38, "right": 58 }
+    "margin": {
+      "top": 38,
+      "right": 58
+    }
   },
-  "launch": { "atLogin": true, "background": true },
-  "permissions": ["usage.read"],
-  "refreshInterval": 30000
+  "launch": {
+    "atLogin": true,
+    "background": true
+  },
+  "permissions": [
+    "usage.read"
+  ],
+  "refreshInterval": 30000,
+  "supportedPlatforms": [
+    "macOS",
+    "Windows"
+  ],
+  "platformEntries": {
+    "macOS": "app/codexeyes.app",
+    "Windows": "windows/publish/codexeyes.exe"
+  }
 }
