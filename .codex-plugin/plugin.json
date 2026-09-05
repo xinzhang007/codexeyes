@@ -1,0 +1,29 @@
+{
+  "name": "codex-eyes",
+  "version": "1.0.0+codex.20260905193732",
+  "description": "\u5728\u684c\u9762\u67e5\u770b Codex \u7528\u91cf\u3001\u989d\u5ea6\u4e0eToken \u6d88\u8017\u3002",
+  "author": {
+    "name": "Local developer"
+  },
+  "keywords": [
+    "codex",
+    "usage",
+    "desktop",
+    "tokens"
+  ],
+  "interface": {
+    "displayName": "codexeyes",
+    "shortDescription": "\u684c\u9762\u4e0a\u7684 codexeyes \u5c0f\u7ec4\u4ef6\u3002",
+    "longDescription": "\u7528\u4e00\u5f20\u7b80\u6d01\u7684\u684c\u9762\u5361\u7247\u67e5\u770b\u672c\u5468\u671f\u989d\u5ea6\u3001Token \u6d88\u8017\u548c\u5269\u4f59\u65f6\u95f4\u3002",
+    "developerName": "Local developer",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive"
+    ],
+    "defaultPrompt": [
+      "\u67e5\u770b\u6211\u672c\u5468\u671f\u7684 Codex \u7528\u91cf",
+      "\u67e5\u770b\u6700\u8fd1 7 \u5929\u7684 tokens \u4f7f\u7528\u60c5\u51b5"
+    ],
+    "brandColor": "#6A5AF9"
+  }
+}
