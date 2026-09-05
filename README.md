@@ -88,6 +88,15 @@ Set-ExecutionPolicy -Scope Process Bypass
 
 Windows 版本默认显示在当前虚拟桌面，窗口始终置顶并隐藏任务栏图标。拖动卡片可调整位置，点击用量区域可复制摘要。
 
+### 直接下载 Windows 程序
+
+不想安装 .NET SDK 时，可以从 [最新 Release](https://github.com/xinzhang007/codexeyes/releases/latest) 下载：
+
+- `codexeyes-win-x64.exe`：大多数 Intel/AMD 电脑
+- `codexeyes-win-arm64.exe`：ARM64 Windows 设备
+
+下载后直接运行即可。程序是自包含版本，不需要另外安装 .NET；首次运行如果被 Windows Defender SmartScreen 拦截，请选择“更多信息”后确认运行。
+
 ## 第一次打开后看不到数据？
 
 codexeyes 不生成或猜测用量，它读取 Codex CLI 已经写入本机的记录。请按下面顺序检查：
