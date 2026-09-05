@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="780" height="855" viewBox="0 0 780 855" role="img" aria-labelledby="title desc">
+  <title id="title">codexeyes desktop widget demo</title>
+  <desc id="desc">A compact dark translucent macOS desktop widget with sample Codex usage data.</desc>
+  <defs>
+    <linearGradient id="card" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#243d5b"/>
+      <stop offset="1" stop-color="#15273e"/>
+    </linearGradient>
+    <linearGradient id="ring" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#8b7cff"/>
+      <stop offset="1" stop-color="#4f46e5"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="20" stdDeviation="22" flood-color="#020617" flood-opacity=".45"/>
+    </filter>
+  </defs>
+  <rect width="780" height="855" rx="42" fill="#0c1421"/>
+  <circle cx="84" cy="112" r="130" fill="#203856" opacity=".45"/>
+  <circle cx="714" cy="742" r="170" fill="#1b3150" opacity=".32"/>
+  <g filter="url(#shadow)" transform="translate(120 78)">
+    <rect width="540" height="699" rx="42" fill="url(#card)" stroke="#ffffff" stroke-opacity=".30" stroke-width="2"/>
+    <circle cx="38" cy="41" r="6" fill="#8b7cff"/>
+    <text x="56" y="47" fill="#ffffff" fill-opacity=".72" font-family="-apple-system,BlinkMacSystemFont,'SF Pro Rounded',sans-serif" font-size="19" font-weight="700" letter-spacing="3">CODEXEYES</text>
+
+    <rect x="28" y="82" width="78" height="78" rx="23" fill="#887bff"/>
+    <text x="67" y="132" text-anchor="middle" fill="#ffffff" font-family="-apple-system,BlinkMacSystemFont,sans-serif" font-size="27" font-weight="700">CE</text>
+    <text x="128" y="112" fill="#ffffff" font-family="-apple-system,BlinkMacSystemFont,sans-serif" font-size="25" font-weight="700">Codex User</text>
+    <rect x="128" y="127" width="53" height="23" rx="8" fill="none" stroke="#ffffff" stroke-opacity=".42"/>
+    <text x="154" y="143" text-anchor="middle" fill="#ffffff" font-family="-apple-system,BlinkMacSystemFont,sans-serif" font-size="11" font-weight="700" letter-spacing="1">PRO</text>
+
+    <text x="28" y="216" fill="#ffffff" fill-opacity=".70" font-family="-apple-system,BlinkMacSystemFont,sans-serif" font-size="17">本周期已使用</text>
+    <text x="28" y="286" fill="#ffffff" font-family="-apple-system,BlinkMacSystemFont,'SF Mono',monospace" font-size="67" font-weight="500">24</text>
+    <text x="122" y="284" fill="#ffffff" fill-opacity=".75" font-family="-apple-system,BlinkMacSystemFont,sans-serif" font-size="28">%</text>
+
+    <circle cx="414" cy="247" r="66" fill="none" stroke="#ffffff" stroke-opacity=".15" stroke-width="15"/>
+    <circle cx="414" cy="247" r="66" fill="none" stroke="url(#ring)" stroke-width="15" stroke-linecap="round" stroke-dasharray="100 415" transform="rotate(-90 414 247)"/>
+    <text x="414" y="253" text-anchor="middle" fill="#ffffff" font-family="-apple-system,BlinkMacSystemFont,sans-serif" font-size="17" font-weight="600">用量</text>
+    <text x="28" y="322" fill="#ffffff" fill-opacity=".82" font-family="-apple-system,BlinkMacSystemFont,sans-serif" font-size="18">还剩 5 天 · 9 月 11 日重置</text>
+
+    <rect x="28" y="353" width="484" height="10" rx="5" fill="#ffffff" fill-opacity=".17"/>
+    <rect x="28" y="353" width="116" height="10" rx="5" fill="#8b7cff"/>
+    <line x1="28" y1="412" x2="512" y2="412" stroke="#ffffff" stroke-opacity=".18"/>
+
+    <text x="28" y="453" fill="#ffffff" fill-opacity=".70" font-family="-apple-system,BlinkMacSystemFont,sans-serif" font-size="16">生成 tokens</text>
+    <text x="28" y="493" fill="#ffffff" font-family="-apple-system,BlinkMacSystemFont,'SF Mono',monospace" font-size="26" font-weight="600">128.4k</text>
+    <text x="286" y="453" fill="#ffffff" fill-opacity=".70" font-family="-apple-system,BlinkMacSystemFont,sans-serif" font-size="16">上下文 tokens</text>
+    <text x="286" y="493" fill="#ffffff" font-family="-apple-system,BlinkMacSystemFont,'SF Mono',monospace" font-size="26" font-weight="600">8.76M</text>
+
+    <text x="28" y="632" fill="#ffffff" fill-opacity=".45" font-family="-apple-system,BlinkMacSystemFont,sans-serif" font-size="14">演示数据 · 仅用于展示布局</text>
+  </g>
+</svg>
