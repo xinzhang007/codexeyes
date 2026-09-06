@@ -20,6 +20,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var panel: NSPanel?
     private var statusItem: NSStatusItem?
     private var panelMoveObserver: NSObjectProtocol?
+    private var workspaceObserver: NSObjectProtocol?
+    private var desktopVisibilityTimer: Timer?
+    private var desktopPanelVisible: Bool?
 
     private let panelFrameKey = "codexeyes.panel.frame"
 
@@ -35,6 +38,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.accessory)
         createStatusItem()
         createPanel()
+        workspaceObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in self?.updateDesktopVisibility() }
+        desktopVisibilityTimer = Timer.scheduledTimer(withTimeInterval: 0.45, repeats: true) { [weak self] _ in
+            self?.updateDesktopVisibility()
+        }
+        updateDesktopVisibility()
     }
 
     private func createPanel() {
@@ -50,7 +62,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panel.title = "codexeyes"
         panel.isOpaque = false
         panel.backgroundColor = .clear
-        panel.hasShadow = true
+        panel.hasShadow = false
         // Keep the widget in the desktop layer. Normal and full-screen app
         // windows stay above it, so it never behaves like an always-on-top HUD.
         panel.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.desktopWindow)))
@@ -84,6 +96,45 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     deinit {
         if let panelMoveObserver { NotificationCenter.default.removeObserver(panelMoveObserver) }
+        if let workspaceObserver { NSWorkspace.shared.notificationCenter.removeObserver(workspaceObserver) }
+        desktopVisibilityTimer?.invalidate()
+    }
+
+    private func updateDesktopVisibility() {
+        guard let panel else { return }
+        let ownBundleID = Bundle.main.bundleIdentifier
+        let frontmostBundleID = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+        let desktopAppIsFrontmost = frontmostBundleID == "com.apple.finder"
+            || frontmostBundleID == "com.apple.dock"
+            || frontmostBundleID == ownBundleID
+        let desktopIsExposed = !hasVisibleApplicationWindow()
+        let shouldShow = desktopAppIsFrontmost || desktopIsExposed
+        guard desktopPanelVisible != shouldShow else { return }
+        desktopPanelVisible = shouldShow
+        if shouldShow {
+            panel.orderFrontRegardless()
+        } else {
+            panel.orderOut(nil)
+        }
+    }
+
+    private func hasVisibleApplicationWindow() -> Bool {
+        let ownPID = Int32(ProcessInfo.processInfo.processIdentifier)
+        let ignoredOwners: Set<String> = [
+            "Dock", "程序坞", "Window Server", "窗口服务器", "WindowManager",
+            "Control Center", "控制中心", "Notification Center", "通知中心"
+        ]
+        let options: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]
+        let windows = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] ?? []
+        return windows.contains { info in
+            guard (info[kCGWindowLayer as String] as? Int) == 0 else { return false }
+            if (info[kCGWindowOwnerPID as String] as? Int32) == ownPID { return false }
+            if let owner = info[kCGWindowOwnerName as String] as? String, ignoredOwners.contains(owner) { return false }
+            guard let bounds = info[kCGWindowBounds as String] as? NSDictionary,
+                  let rect = CGRect(dictionaryRepresentation: bounds),
+                  rect.width * rect.height > 30_000 else { return false }
+            return (info[kCGWindowAlpha as String] as? Double ?? 1) > 0.01
+        }
     }
 
     private func createStatusItem() {
@@ -613,6 +664,7 @@ final class UsageStore: ObservableObject {
 struct UsageWidget: View {
     @StateObject private var usageStore = UsageStore()
     private let account = CodexAccountReader.read()
+    @State private var dragOrigin: NSPoint?
 
     private var statusMessage: String? {
         if !account.isAuthenticated { return "请登录 Codex" }
@@ -635,9 +687,26 @@ struct UsageWidget: View {
         .padding(.bottom, 12)
         .frame(width: 260, height: 285)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .background(Color.black.opacity(0.13), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(Color.white.opacity(0.28), lineWidth: 1))
-        .shadow(color: Color.black.opacity(0.18), radius: 21, y: 10)
+        .contentShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 4)
+                .onChanged { value in
+                    guard let panel = NSApp.windows
+                        .compactMap({ $0 as? NSPanel })
+                        .first(where: { $0.title == "codexeyes" }) else { return }
+                    if dragOrigin == nil {
+                        dragOrigin = panel.frame.origin
+                        NSApp.activate(ignoringOtherApps: false)
+                    }
+                    guard let origin = dragOrigin else { return }
+                    panel.setFrameOrigin(NSPoint(
+                        x: origin.x + value.translation.width,
+                        y: origin.y - value.translation.height
+                    ))
+                }
+                .onEnded { _ in dragOrigin = nil }
+        )
         .preferredColorScheme(.dark)
         .onAppear { usageStore.refresh() }
         .onReceive(Timer.publish(every: 30, on: .main, in: .common).autoconnect()) { _ in usageStore.refresh() }
