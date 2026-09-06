@@ -67,7 +67,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // windows stay above it, so it never behaves like an always-on-top HUD.
         panel.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.desktopWindow)))
         panel.isMovable = true
-        panel.isMovableByWindowBackground = true
+        // Movement is handled by the SwiftUI drag gesture below so the
+        // system background drag cannot move the panel twice.
+        panel.isMovableByWindowBackground = false
         panel.hidesOnDeactivate = false
         panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
         panelMoveObserver = NotificationCenter.default.addObserver(
@@ -102,6 +104,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func updateDesktopVisibility() {
         guard let panel else { return }
+        if NSEvent.pressedMouseButtons != 0, panel.frame.contains(NSEvent.mouseLocation) { return }
         let ownBundleID = Bundle.main.bundleIdentifier
         let frontmostBundleID = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
         let desktopAppIsFrontmost = frontmostBundleID == "com.apple.finder"
