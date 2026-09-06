@@ -295,19 +295,37 @@ private enum CodexUsageReader {
 
         guard !files.isEmpty else { return CodexUsageSnapshot() }
         let latest = files.flatMap { $0 }.max { $0.date < $1.date }
-        var latestWindows: [Int: (date: Date, limit: PrimaryLimit)] = [:]
+        // A session can contain more than one rate-limit source (for example
+        // the main Codex model and Codex Spark). Some sources report zero for
+        // a window even while another source has the current account usage.
+        // Keep all samples so a newer zero from one source cannot hide a real
+        // value from the same active window.
+        var windowsByMinutes: [Int: [(date: Date, limit: PrimaryLimit)]] = [:]
         for record in files.flatMap({ $0 }) {
             for limit in record.limits {
                 guard let minutes = limit.windowMinutes, minutes > 0 else { continue }
-                if latestWindows[minutes] == nil || record.date > latestWindows[minutes]!.date {
-                    latestWindows[minutes] = (record.date, limit)
-                }
+                windowsByMinutes[minutes, default: []].append((date: record.date, limit: limit))
             }
         }
         let now = Date()
-        let windows = latestWindows.values
-            .map { CodexUsageWindow(windowMinutes: $0.limit.windowMinutes ?? 10080, usedPercent: min(100, max(0, $0.limit.usedPercent ?? 0)), resetAt: $0.limit.resetsAt.map { Date(timeIntervalSince1970: $0) }) }
-            .filter { $0.resetAt == nil || $0.resetAt! > now }
+        let windows = windowsByMinutes.values
+            .compactMap { samples -> CodexUsageWindow? in
+                let active = samples.filter { sample in
+                    guard let reset = sample.limit.resetsAt else { return true }
+                    return Date(timeIntervalSince1970: reset) > now
+                }
+                guard let selected = active.max(by: { lhs, rhs in
+                    let leftPercent = lhs.limit.usedPercent ?? 0
+                    let rightPercent = rhs.limit.usedPercent ?? 0
+                    if leftPercent != rightPercent { return leftPercent < rightPercent }
+                    return lhs.date < rhs.date
+                }) else { return nil }
+                return CodexUsageWindow(
+                    windowMinutes: selected.limit.windowMinutes ?? 10080,
+                    usedPercent: min(100, max(0, selected.limit.usedPercent ?? 0)),
+                    resetAt: selected.limit.resetsAt.map { Date(timeIntervalSince1970: $0) }
+                )
+            }
             .sorted { $0.windowMinutes < $1.windowMinutes }
         let mainWindow = windows.max { $0.windowMinutes < $1.windowMinutes }
         let usedPercent = mainWindow?.usedPercent ?? latest?.limits.first?.usedPercent ?? 0

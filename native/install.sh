@@ -50,10 +50,11 @@ PLIST
 
 USER_ID="$(id -u)"
 if launchctl print "gui/$USER_ID/$AGENT_LABEL" >/dev/null 2>&1; then
-  launchctl kickstart -k "gui/$USER_ID/$AGENT_LABEL"
-else
-  launchctl bootstrap "gui/$USER_ID" "$AGENT_PATH"
+  # Reload the plist so an existing agent cannot keep an old desktop path or
+  # stale launch arguments after reinstalling the app.
+  launchctl bootout "gui/$USER_ID/$AGENT_LABEL" >/dev/null 2>&1 || true
 fi
+launchctl bootstrap "gui/$USER_ID" "$AGENT_PATH"
 
 open "$APP_DEST"
 echo "Desktop widget installed: $APP_DEST"

@@ -289,13 +289,28 @@ internal static class CodexUsageReader
 
         var all = allFiles.SelectMany(x => x).ToList();
         var latest = all.MaxBy(x => x.Date);
-        var latestWindows = new Dictionary<int, (DateTimeOffset Date, UsageWindow Limit)>();
+        // A session can contain multiple rate-limit sources. Keep all samples
+        // for an active window so a newer zero from one source cannot hide the
+        // account usage reported by another source.
+        var windowsByMinutes = new Dictionary<int, List<(DateTimeOffset Date, UsageWindow Limit)>>();
         foreach (var record in all)
         foreach (var limit in record.Limits)
-            if (!latestWindows.TryGetValue(limit.Minutes, out var current) || record.Date > current.Date)
-                latestWindows[limit.Minutes] = (record.Date, limit);
+        {
+            if (!windowsByMinutes.TryGetValue(limit.Minutes, out var samples))
+                windowsByMinutes[limit.Minutes] = samples = [];
+            samples.Add((record.Date, limit));
+        }
 
-        var main = latestWindows.Values.OrderBy(x => x.Limit.Minutes).LastOrDefault().Limit ?? latest?.Limits.FirstOrDefault();
+        var now = DateTimeOffset.Now;
+        var selectedWindows = windowsByMinutes.Values
+            .Select(samples => samples
+                .Where(sample => sample.Limit.ResetAt is null || sample.Limit.ResetAt > now)
+                .OrderByDescending(sample => sample.Limit.Percent)
+                .ThenByDescending(sample => sample.Date)
+                .FirstOrDefault())
+            .Where(sample => sample.Limit is not null)
+            .ToList();
+        var main = selectedWindows.OrderBy(x => x.Limit.Minutes).LastOrDefault().Limit ?? latest?.Limits.FirstOrDefault();
         var resetAt = main?.ResetAt;
         var minutes = main?.Minutes > 0 ? main.Minutes : 10080;
         var windowStart = resetAt?.AddMinutes(-minutes) ?? DateTimeOffset.UtcNow.AddMinutes(-minutes);
