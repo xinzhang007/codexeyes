@@ -51,13 +51,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = true
-        // Keep the widget in the desktop window layer so it does not cover other apps.
-        // It is still visible across Spaces and full-screen desktops.
-        panel.level = .normal
+        // Keep the widget in the desktop layer. Normal and full-screen app
+        // windows stay above it, so it never behaves like an always-on-top HUD.
+        panel.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.desktopWindow)))
         panel.isMovable = true
         panel.isMovableByWindowBackground = true
         panel.hidesOnDeactivate = false
-        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
+        panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
         panelMoveObserver = NotificationCenter.default.addObserver(
             forName: NSWindow.didMoveNotification,
             object: panel,
