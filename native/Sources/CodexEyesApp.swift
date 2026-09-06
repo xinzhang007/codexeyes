@@ -16,46 +16,12 @@ struct CodexEyesApp: App {
     }
 }
 
-final class DesktopPanel: NSPanel {
-    /// Lets the desktop visibility monitor keep the panel alive for the
-    /// duration of a drag, even when the pointer leaves the card.
-    private(set) var isDraggingPanel = false
-
-    override var canBecomeKey: Bool { true }
-    override var canBecomeMain: Bool { false }
-
-    func beginDrag(with event: NSEvent) {
-        // Use AppKit's native tracking loop. It captures subsequent
-        // dragged/up events even when the pointer leaves the panel and
-        // works consistently with a borderless NSPanel.
-        isDraggingPanel = true
-        performDrag(with: event)
-        isDraggingPanel = false
-    }
-}
-
-/// NSHostingView receives the mouse-down before SwiftUI gestures do. Starting
-/// the drag here makes every part of the compact card movable, including text
-/// and the usage ring.
-final class DragHostingView<Content: View>: NSHostingView<Content> {
-    override func mouseDown(with event: NSEvent) {
-        if let panel = window as? DesktopPanel {
-            panel.beginDrag(with: event)
-        } else {
-            super.mouseDown(with: event)
-        }
-    }
-}
-
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var panel: NSPanel?
     private var statusItem: NSStatusItem?
-    private var panelMoveObserver: NSObjectProtocol?
     private var workspaceObserver: NSObjectProtocol?
     private var desktopVisibilityTimer: DispatchSourceTimer?
     private var desktopPanelVisible: Bool?
-
-    private let panelFrameKey = "codexeyes.panel.frame"
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let bundleID = Bundle.main.bundleIdentifier ?? "local.codex.eyes"
@@ -85,8 +51,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func createPanel() {
         let size = NSSize(width: 260, height: 285)
         let visibleFrame = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
-        let origin = restoredOrigin(size: size, fallback: visibleFrame)
-        let panel = DesktopPanel(
+        let origin = NSPoint(x: visibleFrame.maxX - size.width - 58, y: visibleFrame.maxY - size.height - 38)
+        let panel = NSPanel(
             contentRect: NSRect(origin: origin, size: size),
             styleMask: [.borderless],
             backing: .buffered,
@@ -99,50 +65,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Use a mouse-receiving level while the visibility monitor keeps the
         // panel hidden whenever an application window is on screen.
         panel.level = .floating
-        panel.isMovable = true
         panel.becomesKeyOnlyIfNeeded = false
         panel.ignoresMouseEvents = false
-        // Movement is handled by DragHostingView so every part of the card
-        // follows the same native drag path.
+        // Keep the card anchored to the desktop corner.
+        panel.isMovable = false
         panel.isMovableByWindowBackground = false
         panel.hidesOnDeactivate = false
         panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
-        panelMoveObserver = NotificationCenter.default.addObserver(
-            forName: NSWindow.didMoveNotification,
-            object: panel,
-            queue: .main
-        ) { [weak self, weak panel] _ in
-            guard let self, let panel else { return }
-            UserDefaults.standard.set(NSStringFromRect(panel.frame), forKey: self.panelFrameKey)
-        }
-        panel.contentView = DragHostingView(rootView: UsageWidget())
+        panel.contentView = NSHostingView(rootView: UsageWidget())
         panel.orderFrontRegardless()
         self.panel = panel
     }
 
-    private func restoredOrigin(size: NSSize, fallback visibleFrame: NSRect) -> NSPoint {
-        if let stored = UserDefaults.standard.string(forKey: panelFrameKey) {
-            let frame = NSRectFromString(stored)
-            if frame.width == size.width, frame.height == size.height,
-               NSScreen.screens.contains(where: { $0.visibleFrame.intersects(frame) }) {
-                return frame.origin
-            }
-        }
-        return NSPoint(x: visibleFrame.maxX - size.width - 58, y: visibleFrame.maxY - size.height - 38)
-    }
-
     deinit {
-        if let panelMoveObserver { NotificationCenter.default.removeObserver(panelMoveObserver) }
         if let workspaceObserver { NSWorkspace.shared.notificationCenter.removeObserver(workspaceObserver) }
         desktopVisibilityTimer?.cancel()
     }
 
     private func updateDesktopVisibility() {
         guard let panel else { return }
-        if let desktopPanel = panel as? DesktopPanel, desktopPanel.isDraggingPanel {
-            return
-        }
-        if NSEvent.pressedMouseButtons != 0, panel.frame.contains(NSEvent.mouseLocation) { return }
         let desktopIsExposed = !hasVisibleApplicationWindow()
         let shouldShow = desktopIsExposed
         guard desktopPanelVisible != shouldShow else { return }
