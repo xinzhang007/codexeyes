@@ -16,12 +16,43 @@ struct CodexEyesApp: App {
     }
 }
 
+final class DesktopPanel: NSPanel {
+    /// Lets the desktop visibility monitor keep the panel alive for the
+    /// duration of a drag, even when the pointer leaves the card.
+    private(set) var isDraggingPanel = false
+
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { false }
+
+    func beginDrag(with event: NSEvent) {
+        // Use AppKit's native tracking loop. It captures subsequent
+        // dragged/up events even when the pointer leaves the panel and
+        // works consistently with a borderless NSPanel.
+        isDraggingPanel = true
+        performDrag(with: event)
+        isDraggingPanel = false
+    }
+}
+
+/// NSHostingView receives the mouse-down before SwiftUI gestures do. Starting
+/// the drag here makes every part of the compact card movable, including text
+/// and the usage ring.
+final class DragHostingView<Content: View>: NSHostingView<Content> {
+    override func mouseDown(with event: NSEvent) {
+        if let panel = window as? DesktopPanel {
+            panel.beginDrag(with: event)
+        } else {
+            super.mouseDown(with: event)
+        }
+    }
+}
+
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var panel: NSPanel?
     private var statusItem: NSStatusItem?
     private var panelMoveObserver: NSObjectProtocol?
     private var workspaceObserver: NSObjectProtocol?
-    private var desktopVisibilityTimer: Timer?
+    private var desktopVisibilityTimer: DispatchSourceTimer?
     private var desktopPanelVisible: Bool?
 
     private let panelFrameKey = "codexeyes.panel.frame"
@@ -43,9 +74,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             object: nil,
             queue: .main
         ) { [weak self] _ in self?.updateDesktopVisibility() }
-        desktopVisibilityTimer = Timer.scheduledTimer(withTimeInterval: 0.45, repeats: true) { [weak self] _ in
-            self?.updateDesktopVisibility()
-        }
+        let visibilityTimer = DispatchSource.makeTimerSource(queue: .main)
+        visibilityTimer.schedule(deadline: .now(), repeating: .milliseconds(450))
+        visibilityTimer.setEventHandler { [weak self] in self?.updateDesktopVisibility() }
+        visibilityTimer.resume()
+        desktopVisibilityTimer = visibilityTimer
         updateDesktopVisibility()
     }
 
@@ -53,7 +86,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let size = NSSize(width: 260, height: 285)
         let visibleFrame = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
         let origin = restoredOrigin(size: size, fallback: visibleFrame)
-        let panel = NSPanel(
+        let panel = DesktopPanel(
             contentRect: NSRect(origin: origin, size: size),
             styleMask: [.borderless],
             backing: .buffered,
@@ -63,12 +96,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = false
-        // Keep the widget in the desktop layer. Normal and full-screen app
-        // windows stay above it, so it never behaves like an always-on-top HUD.
-        panel.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.desktopWindow)))
+        // Use a mouse-receiving level while the visibility monitor keeps the
+        // panel hidden whenever an application window is on screen.
+        panel.level = .floating
         panel.isMovable = true
-        // Movement is handled by the SwiftUI drag gesture below so the
-        // system background drag cannot move the panel twice.
+        panel.becomesKeyOnlyIfNeeded = false
+        panel.ignoresMouseEvents = false
+        // Movement is handled by DragHostingView so every part of the card
+        // follows the same native drag path.
         panel.isMovableByWindowBackground = false
         panel.hidesOnDeactivate = false
         panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
@@ -80,7 +115,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard let self, let panel else { return }
             UserDefaults.standard.set(NSStringFromRect(panel.frame), forKey: self.panelFrameKey)
         }
-        panel.contentView = NSHostingView(rootView: UsageWidget())
+        panel.contentView = DragHostingView(rootView: UsageWidget())
         panel.orderFrontRegardless()
         self.panel = panel
     }
@@ -99,19 +134,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     deinit {
         if let panelMoveObserver { NotificationCenter.default.removeObserver(panelMoveObserver) }
         if let workspaceObserver { NSWorkspace.shared.notificationCenter.removeObserver(workspaceObserver) }
-        desktopVisibilityTimer?.invalidate()
+        desktopVisibilityTimer?.cancel()
     }
 
     private func updateDesktopVisibility() {
         guard let panel else { return }
+        if let desktopPanel = panel as? DesktopPanel, desktopPanel.isDraggingPanel {
+            return
+        }
         if NSEvent.pressedMouseButtons != 0, panel.frame.contains(NSEvent.mouseLocation) { return }
-        let ownBundleID = Bundle.main.bundleIdentifier
-        let frontmostBundleID = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
-        let desktopAppIsFrontmost = frontmostBundleID == "com.apple.finder"
-            || frontmostBundleID == "com.apple.dock"
-            || frontmostBundleID == ownBundleID
         let desktopIsExposed = !hasVisibleApplicationWindow()
-        let shouldShow = desktopAppIsFrontmost || desktopIsExposed
+        let shouldShow = desktopIsExposed
         guard desktopPanelVisible != shouldShow else { return }
         desktopPanelVisible = shouldShow
         if shouldShow {
@@ -159,8 +192,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func showPanel() {
-        panel?.orderFrontRegardless()
-        NSApp.activate(ignoringOtherApps: true)
+        updateDesktopVisibility()
     }
 
     @objc private func quitApp() {
@@ -667,7 +699,6 @@ final class UsageStore: ObservableObject {
 struct UsageWidget: View {
     @StateObject private var usageStore = UsageStore()
     private let account = CodexAccountReader.read()
-    @State private var dragOrigin: NSPoint?
 
     private var statusMessage: String? {
         if !account.isAuthenticated { return "请登录 Codex" }
@@ -691,25 +722,6 @@ struct UsageWidget: View {
         .frame(width: 260, height: 285)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(Color.white.opacity(0.28), lineWidth: 1))
-        .contentShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 4)
-                .onChanged { value in
-                    guard let panel = NSApp.windows
-                        .compactMap({ $0 as? NSPanel })
-                        .first(where: { $0.title == "codexeyes" }) else { return }
-                    if dragOrigin == nil {
-                        dragOrigin = panel.frame.origin
-                        NSApp.activate(ignoringOtherApps: false)
-                    }
-                    guard let origin = dragOrigin else { return }
-                    panel.setFrameOrigin(NSPoint(
-                        x: origin.x + value.translation.width,
-                        y: origin.y - value.translation.height
-                    ))
-                }
-                .onEnded { _ in dragOrigin = nil }
-        )
         .preferredColorScheme(.dark)
         .onAppear { usageStore.refresh() }
         .onReceive(Timer.publish(every: 30, on: .main, in: .common).autoconnect()) { _ in usageStore.refresh() }
