@@ -18,9 +18,17 @@ struct CodexEyesApp: App {
 
 /// Start AppKit's built-in window drag from the card itself. This keeps the
 /// interaction small and predictable without a SwiftUI drag state machine.
+final class DesktopPanel: NSPanel {
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { false }
+}
+
 final class SimpleDragHostingView<Content: View>: NSHostingView<Content> {
     override func mouseDown(with event: NSEvent) {
-        window?.performDrag(with: event)
+        guard let window else { return }
+        NSApp.activate(ignoringOtherApps: false)
+        window.makeKey()
+        window.performDrag(with: event)
     }
 }
 
@@ -49,7 +57,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let size = NSSize(width: 260, height: 285)
         let visibleFrame = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
         let origin = restoredOrigin(size: size, fallback: visibleFrame)
-        let panel = NSPanel(
+        let panel = DesktopPanel(
             contentRect: NSRect(origin: origin, size: size),
             styleMask: [.borderless],
             backing: .buffered,
