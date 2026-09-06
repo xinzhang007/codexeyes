@@ -237,8 +237,11 @@ public sealed class UsageViewModel : System.ComponentModel.INotifyPropertyChange
     public long GeneratedTokens => _snapshot.GeneratedTokens;
     public long ContextTokens => _snapshot.ContextTokens;
     public string PlanType => _snapshot.PlanType.ToUpperInvariant();
+    public string RemainingText => _snapshot.ResetAt is { } reset
+        ? FormatRemaining(reset - DateTimeOffset.Now)
+        : "—";
     public string ResetText => _snapshot.ResetAt is { } reset
-        ? $"还剩 {Math.Max(0, (int)Math.Ceiling((reset - DateTimeOffset.Now).TotalDays))} 天 · {reset.ToLocalTime():M月 d日}重置"
+        ? $"还剩 {RemainingText} · {reset.ToLocalTime():M月 d日}重置"
         : Account.IsAuthenticated ? "等待 Codex 数据" : "请登录 Codex";
     public Color UsageAccent => UsedPercent >= 95 ? Color.FromRgb(250, 87, 110) : UsedPercent >= 80 ? Color.FromRgb(255, 161, 61) : Color.FromRgb(139, 124, 255);
     public Brush AccentBrush => new SolidColorBrush(UsageAccent);
@@ -251,6 +254,7 @@ public sealed class UsageViewModel : System.ComponentModel.INotifyPropertyChange
         OnChanged(nameof(GeneratedTokens));
         OnChanged(nameof(ContextTokens));
         OnChanged(nameof(PlanType));
+        OnChanged(nameof(RemainingText));
         OnChanged(nameof(ResetText));
         OnChanged(nameof(UsageAccent));
         OnChanged(nameof(AccentBrush));
@@ -258,6 +262,13 @@ public sealed class UsageViewModel : System.ComponentModel.INotifyPropertyChange
     }
 
     private void OnChanged(string name) => PropertyChanged?.Invoke(this, new(name));
+    private static string FormatRemaining(TimeSpan remaining)
+    {
+        var seconds = Math.Max(0, (long)remaining.TotalSeconds);
+        var days = seconds / 86_400;
+        var hours = (seconds % 86_400) / 3_600;
+        return $"{days}天 {hours}小时";
+    }
     private static string FormatTokens(long count) => count >= 1_000_000 ? $"{count / 1_000_000d:0.00}M" : count >= 1_000 ? $"{count / 1_000d:0.0}k" : count.ToString(CultureInfo.InvariantCulture);
 }
 

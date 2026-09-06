@@ -525,10 +525,12 @@ final class UsageStore: ObservableObject {
         formatter.dateFormat = "M月 d日"
         return "\(formatter.string(from: resetAt))重置"
     }
-    var daysLeftText: String {
+    var remainingText: String {
         guard let resetAt = snapshot.resetAt else { return "—" }
-        let days = max(0, Int(ceil(resetAt.timeIntervalSinceNow / 86_400)))
-        return "\(days) 天"
+        let seconds = max(0, Int(resetAt.timeIntervalSinceNow))
+        let days = seconds / 86_400
+        let hours = (seconds % 86_400) / 3_600
+        return "\(days)天 \(hours)小时"
     }
 
     private func setSessionActive(_ active: Bool) {
@@ -649,7 +651,7 @@ struct UsageWidget: View {
                 HStack(alignment: .lastTextBaseline, spacing: 3) { Text("\(usageStore.usedPercent)").font(.system(size: 47, weight: .medium, design: .monospaced)).tracking(-4).foregroundStyle(ink); Text("%").font(.system(size: 20, weight: .medium)).foregroundStyle(subtle) }
                 HStack(spacing: 0) {
                     Text("还剩 ").foregroundStyle(subtle)
-                    Text(usageStore.daysLeftText).bold().foregroundStyle(ink)
+                    Text(usageStore.remainingText).bold().foregroundStyle(ink)
                     Text(" · \(usageStore.resetText)").foregroundStyle(subtle)
                 }
                 .font(.system(size: 10))
