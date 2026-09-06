@@ -19,6 +19,9 @@ struct CodexEyesApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var panel: NSPanel?
     private var statusItem: NSStatusItem?
+    private var panelMoveObserver: NSObjectProtocol?
+
+    private let panelFrameKey = "codexeyes.panel.frame"
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let bundleID = Bundle.main.bundleIdentifier ?? "local.codex.eyes"
@@ -37,10 +40,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func createPanel() {
         let size = NSSize(width: 260, height: 285)
         let visibleFrame = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
-        let origin = NSPoint(x: visibleFrame.maxX - size.width - 58, y: visibleFrame.maxY - size.height - 38)
+        let origin = restoredOrigin(size: size, fallback: visibleFrame)
         let panel = NSPanel(
             contentRect: NSRect(origin: origin, size: size),
-            styleMask: [.borderless, .resizable],
+            styleMask: [.borderless],
             backing: .buffered,
             defer: false
         )
@@ -51,15 +54,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Keep the widget in the desktop window layer so it does not cover other apps.
         // It is still visible across Spaces and full-screen desktops.
         panel.level = .normal
+        panel.isMovable = true
         panel.isMovableByWindowBackground = true
         panel.hidesOnDeactivate = false
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
-        panel.setFrameAutosaveName("CodexEyesWidgetFrame")
-        panel.minSize = size
-        panel.maxSize = size
+        panelMoveObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didMoveNotification,
+            object: panel,
+            queue: .main
+        ) { [weak self, weak panel] _ in
+            guard let self, let panel else { return }
+            UserDefaults.standard.set(NSStringFromRect(panel.frame), forKey: self.panelFrameKey)
+        }
         panel.contentView = NSHostingView(rootView: UsageWidget())
         panel.orderFrontRegardless()
         self.panel = panel
+    }
+
+    private func restoredOrigin(size: NSSize, fallback visibleFrame: NSRect) -> NSPoint {
+        if let stored = UserDefaults.standard.string(forKey: panelFrameKey) {
+            let frame = NSRectFromString(stored)
+            if frame.width == size.width, frame.height == size.height,
+               NSScreen.screens.contains(where: { $0.visibleFrame.intersects(frame) }) {
+                return frame.origin
+            }
+        }
+        return NSPoint(x: visibleFrame.maxX - size.width - 58, y: visibleFrame.maxY - size.height - 38)
+    }
+
+    deinit {
+        if let panelMoveObserver { NotificationCenter.default.removeObserver(panelMoveObserver) }
     }
 
     private func createStatusItem() {
@@ -589,7 +613,6 @@ final class UsageStore: ObservableObject {
 struct UsageWidget: View {
     @StateObject private var usageStore = UsageStore()
     private let account = CodexAccountReader.read()
-    @State private var detailsVisible = false
 
     private var statusMessage: String? {
         if !account.isAuthenticated { return "请登录 Codex" }
@@ -603,11 +626,7 @@ struct UsageWidget: View {
             accountRow
             summary
                 .contentShape(Rectangle())
-                .onHover { detailsVisible = $0 }
                 .onTapGesture { usageStore.copySummary(for: account) }
-                .popover(isPresented: $detailsVisible, attachmentAnchor: .point(.topTrailing), arrowEdge: .top) {
-                    UsageDetailsView(windows: usageStore.snapshot.windows, email: account.email)
-                }
             progressMeter
             stats
         }
@@ -701,53 +720,6 @@ struct UsageWidget: View {
         .overlay(alignment: .bottom) { Rectangle().fill(softLine).frame(height: 1) }
     }
 
-}
-
-private struct UsageDetailsView: View {
-    let windows: [CodexUsageWindow]
-    let email: String
-
-    private var visibleWindows: [CodexUsageWindow] {
-        windows.filter { $0.windowMinutes <= 360 || $0.windowMinutes >= 2_880 }
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("窗口详情")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(ink)
-            if !email.isEmpty {
-                Text(email).font(.system(size: 9)).foregroundStyle(subtle).lineLimit(1).truncationMode(.middle)
-            }
-            if visibleWindows.isEmpty {
-                Text("暂无窗口数据")
-                    .font(.system(size: 10))
-                    .foregroundStyle(subtle)
-            } else {
-                ForEach(visibleWindows) { window in
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(window.title).font(.system(size: 10)).foregroundStyle(ink)
-                            Text(window.countdownText).font(.system(size: 9)).foregroundStyle(subtle)
-                        }
-                        Spacer(minLength: 12)
-                        Text(window.percentText)
-                            .font(.system(size: 14, weight: .medium, design: .monospaced))
-                            .foregroundStyle(ink)
-                    }
-                }
-            }
-            Text("点击面板可复制摘要")
-                .font(.system(size: 9))
-                .foregroundStyle(subtle)
-        }
-        .padding(15)
-        .frame(width: 220)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
-        .background(Color.black.opacity(0.10), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 15, style: .continuous).stroke(Color.white.opacity(0.30), lineWidth: 1))
-        .preferredColorScheme(.dark)
-    }
 }
 
 private struct AccountAvatar: View {
