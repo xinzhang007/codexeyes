@@ -16,9 +16,20 @@ struct CodexEyesApp: App {
     }
 }
 
+/// Start AppKit's built-in window drag from the card itself. This keeps the
+/// interaction small and predictable without a SwiftUI drag state machine.
+final class SimpleDragHostingView<Content: View>: NSHostingView<Content> {
+    override func mouseDown(with event: NSEvent) {
+        window?.performDrag(with: event)
+    }
+}
+
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var panel: NSPanel?
     private var statusItem: NSStatusItem?
+    private var panelMoveObserver: NSObjectProtocol?
+
+    private let panelFrameKey = "codexeyes.panel.frame"
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let bundleID = Bundle.main.bundleIdentifier ?? "local.codex.eyes"
@@ -37,7 +48,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func createPanel() {
         let size = NSSize(width: 260, height: 285)
         let visibleFrame = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
-        let origin = NSPoint(x: visibleFrame.maxX - size.width - 58, y: visibleFrame.maxY - size.height - 38)
+        let origin = restoredOrigin(size: size, fallback: visibleFrame)
         let panel = NSPanel(
             contentRect: NSRect(origin: origin, size: size),
             styleMask: [.borderless],
@@ -51,15 +62,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Keep the card in the desktop layer. Application windows naturally
         // cover it, so it is visible when the desktop is exposed only.
         panel.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.desktopWindow)))
-        panel.ignoresMouseEvents = true
-        // Keep the card anchored to the desktop corner.
-        panel.isMovable = false
-        panel.isMovableByWindowBackground = false
+        panel.ignoresMouseEvents = false
+        panel.isMovable = true
+        panel.isMovableByWindowBackground = true
         panel.hidesOnDeactivate = false
         panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
-        panel.contentView = NSHostingView(rootView: UsageWidget())
+        panelMoveObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didMoveNotification,
+            object: panel,
+            queue: .main
+        ) { [weak self, weak panel] _ in
+            guard let self, let panel else { return }
+            UserDefaults.standard.set(NSStringFromRect(panel.frame), forKey: self.panelFrameKey)
+        }
+        panel.contentView = SimpleDragHostingView(rootView: UsageWidget())
         panel.orderFrontRegardless()
         self.panel = panel
+    }
+
+    private func restoredOrigin(size: NSSize, fallback visibleFrame: NSRect) -> NSPoint {
+        if let stored = UserDefaults.standard.string(forKey: panelFrameKey) {
+            let frame = NSRectFromString(stored)
+            if frame.width == size.width, frame.height == size.height,
+               NSScreen.screens.contains(where: { $0.visibleFrame.intersects(frame) }) {
+                return frame.origin
+            }
+        }
+        return NSPoint(x: visibleFrame.maxX - size.width - 58, y: visibleFrame.maxY - size.height - 38)
+    }
+
+    deinit {
+        if let panelMoveObserver { NotificationCenter.default.removeObserver(panelMoveObserver) }
     }
 
     private func createStatusItem() {
