@@ -67,9 +67,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = false
-        // Keep the card in the desktop layer. Application windows naturally
-        // cover it, so it is visible when the desktop is exposed only.
-        panel.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.desktopWindow)))
+        // Use the normal window order so the active application naturally
+        // covers the card while the exposed desktop remains interactive.
+        panel.level = .normal
         panel.ignoresMouseEvents = false
         panel.isMovable = true
         panel.isMovableByWindowBackground = true
