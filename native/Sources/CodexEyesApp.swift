@@ -19,9 +19,6 @@ struct CodexEyesApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var panel: NSPanel?
     private var statusItem: NSStatusItem?
-    private var workspaceObserver: NSObjectProtocol?
-    private var desktopVisibilityTimer: DispatchSourceTimer?
-    private var desktopPanelVisible: Bool?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let bundleID = Bundle.main.bundleIdentifier ?? "local.codex.eyes"
@@ -35,17 +32,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.accessory)
         createStatusItem()
         createPanel()
-        workspaceObserver = NSWorkspace.shared.notificationCenter.addObserver(
-            forName: NSWorkspace.didActivateApplicationNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in self?.updateDesktopVisibility() }
-        let visibilityTimer = DispatchSource.makeTimerSource(queue: .main)
-        visibilityTimer.schedule(deadline: .now(), repeating: .milliseconds(450))
-        visibilityTimer.setEventHandler { [weak self] in self?.updateDesktopVisibility() }
-        visibilityTimer.resume()
-        desktopVisibilityTimer = visibilityTimer
-        updateDesktopVisibility()
     }
 
     private func createPanel() {
@@ -62,11 +48,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = false
-        // Use a mouse-receiving level while the visibility monitor keeps the
-        // panel hidden whenever an application window is on screen.
-        panel.level = .floating
-        panel.becomesKeyOnlyIfNeeded = false
-        panel.ignoresMouseEvents = false
+        // Keep the card in the desktop layer. Application windows naturally
+        // cover it, so it is visible when the desktop is exposed only.
+        panel.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.desktopWindow)))
+        panel.ignoresMouseEvents = true
         // Keep the card anchored to the desktop corner.
         panel.isMovable = false
         panel.isMovableByWindowBackground = false
@@ -75,43 +60,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panel.contentView = NSHostingView(rootView: UsageWidget())
         panel.orderFrontRegardless()
         self.panel = panel
-    }
-
-    deinit {
-        if let workspaceObserver { NSWorkspace.shared.notificationCenter.removeObserver(workspaceObserver) }
-        desktopVisibilityTimer?.cancel()
-    }
-
-    private func updateDesktopVisibility() {
-        guard let panel else { return }
-        let desktopIsExposed = !hasVisibleApplicationWindow()
-        let shouldShow = desktopIsExposed
-        guard desktopPanelVisible != shouldShow else { return }
-        desktopPanelVisible = shouldShow
-        if shouldShow {
-            panel.orderFrontRegardless()
-        } else {
-            panel.orderOut(nil)
-        }
-    }
-
-    private func hasVisibleApplicationWindow() -> Bool {
-        let ownPID = Int32(ProcessInfo.processInfo.processIdentifier)
-        let ignoredOwners: Set<String> = [
-            "Dock", "程序坞", "Window Server", "窗口服务器", "WindowManager",
-            "Control Center", "控制中心", "Notification Center", "通知中心"
-        ]
-        let options: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]
-        let windows = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] ?? []
-        return windows.contains { info in
-            guard (info[kCGWindowLayer as String] as? Int) == 0 else { return false }
-            if (info[kCGWindowOwnerPID as String] as? Int32) == ownPID { return false }
-            if let owner = info[kCGWindowOwnerName as String] as? String, ignoredOwners.contains(owner) { return false }
-            guard let bounds = info[kCGWindowBounds as String] as? NSDictionary,
-                  let rect = CGRect(dictionaryRepresentation: bounds),
-                  rect.width * rect.height > 30_000 else { return false }
-            return (info[kCGWindowAlpha as String] as? Double ?? 1) > 0.01
-        }
     }
 
     private func createStatusItem() {
@@ -133,7 +81,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func showPanel() {
-        updateDesktopVisibility()
+        panel?.orderFrontRegardless()
     }
 
     @objc private func quitApp() {
