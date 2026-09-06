@@ -209,6 +209,7 @@ public sealed class AccountProfile
     public string Initials { get; init; } = "C";
     public string? AvatarUrl { get; init; }
     public bool IsAuthenticated { get; init; }
+    public string PlanType { get; init; } = "Codex";
 }
 
 public sealed class UsageWindow
@@ -236,7 +237,7 @@ public sealed class UsageViewModel : System.ComponentModel.INotifyPropertyChange
     public double UsedPercent => _snapshot.UsedPercent;
     public long GeneratedTokens => _snapshot.GeneratedTokens;
     public long ContextTokens => _snapshot.ContextTokens;
-    public string PlanType => _snapshot.PlanType.ToUpperInvariant();
+    public string PlanType => Account.PlanType;
     public string RemainingText => _snapshot.ResetAt is { } reset
         ? FormatRemaining(reset - DateTimeOffset.Now)
         : "—";
@@ -423,15 +424,21 @@ internal static class CodexAccountReader
             string? name = null;
             var email = "";
             string? avatar = null;
+            var plan = "Codex";
             if (claims is JsonElement claimElement)
             {
                 name = claimElement.TryGetProperty("name", out var nameElement) ? nameElement.GetString() : null;
                 email = claimElement.TryGetProperty("email", out var emailElement) ? emailElement.GetString() ?? "" : "";
                 avatar = claimElement.TryGetProperty("picture", out var picture) ? picture.GetString() : null;
                 avatar ??= claimElement.TryGetProperty("avatar_url", out var avatarElement) ? avatarElement.GetString() : null;
+                if (claimElement.TryGetProperty("https://api.openai.com/auth", out var authClaims)
+                    && authClaims.TryGetProperty("chatgpt_plan_type", out var planElement))
+                {
+                    plan = planElement.GetString() ?? plan;
+                }
             }
             name = string.IsNullOrWhiteSpace(name) ? "Codex" : name.Trim();
-            return new AccountProfile { Name = name, Email = email, AvatarUrl = avatar, Initials = Initials(name), IsAuthenticated = true };
+            return new AccountProfile { Name = name, Email = email, AvatarUrl = avatar, Initials = Initials(name), IsAuthenticated = true, PlanType = PlanName(plan) };
         }
         catch { return new(); }
     }
@@ -455,6 +462,8 @@ internal static class CodexAccountReader
         var parts = name.Split([' ', '-'], StringSplitOptions.RemoveEmptyEntries);
         return parts.Length > 1 ? string.Concat(parts.Take(2).Select(x => x[0])).ToUpperInvariant() : name[..Math.Min(2, name.Length)].ToUpperInvariant();
     }
+
+    private static string PlanName(string? value) => string.IsNullOrWhiteSpace(value) ? "Codex" : value.Trim().ToUpperInvariant();
 
     private static bool TryGet(JsonElement element, string name, out JsonElement value) => element.TryGetProperty(name, out value) || element.TryGetProperty(string.Concat(name.Split('_').Select((part, index) => index == 0 ? part : char.ToUpperInvariant(part[0]) + part[1..])), out value);
 }

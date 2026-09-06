@@ -170,6 +170,7 @@ struct AccountProfile {
     var initials = "C"
     var isAuthenticated = false
     var avatarURL: URL? = nil
+    var planType = "Codex"
 }
 
 private struct AuthFile: Decodable {
@@ -189,12 +190,22 @@ private struct IdentityClaims: Decodable {
     let email: String?
     let picture: String?
     let avatarURL: String?
+    let auth: IdentityAuthClaims?
 
     enum CodingKeys: String, CodingKey {
         case name
         case email
         case picture
         case avatarURL = "avatar_url"
+        case auth = "https://api.openai.com/auth"
+    }
+}
+
+private struct IdentityAuthClaims: Decodable {
+    let chatgptPlanType: String?
+
+    enum CodingKeys: String, CodingKey {
+        case chatgptPlanType = "chatgpt_plan_type"
     }
 }
 
@@ -209,7 +220,14 @@ private enum CodexAccountReader {
             ? claims.name!.trimmingCharacters(in: .whitespacesAndNewlines)
             : "Codex"
         let avatarURL = (claims.picture ?? claims.avatarURL).flatMap(URL.init(string:))
-        return AccountProfile(name: name, email: claims.email ?? "", initials: initials(for: name), isAuthenticated: true, avatarURL: avatarURL)
+        return AccountProfile(
+            name: name,
+            email: claims.email ?? "",
+            initials: initials(for: name),
+            isAuthenticated: true,
+            avatarURL: avatarURL,
+            planType: planName(claims.auth?.chatgptPlanType)
+        )
     }
 
     private static func decodeClaims(from token: String) -> IdentityClaims? {
@@ -225,6 +243,11 @@ private enum CodexAccountReader {
         let parts = name.split(whereSeparator: { $0 == " " || $0 == "-" })
         if parts.count > 1 { return String(parts.prefix(2).compactMap { $0.first }).uppercased() }
         return String(name.prefix(2)).uppercased()
+    }
+
+    private static func planName(_ value: String?) -> String {
+        guard let value, !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return "Codex" }
+        return value.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
     }
 }
 
@@ -677,7 +700,7 @@ struct UsageWidget: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(account.name).font(.system(size: 14, weight: .semibold)).foregroundStyle(ink)
                 HStack(spacing: 5) {
-                    Text(usageStore.planType).font(.system(size: 7, weight: .bold, design: .rounded)).tracking(0.5).foregroundStyle(.white).padding(.horizontal, 4).padding(.vertical, 2).overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.white.opacity(0.32)))
+                    Text(account.planType).font(.system(size: 7, weight: .bold, design: .rounded)).tracking(0.5).foregroundStyle(.white).padding(.horizontal, 4).padding(.vertical, 2).overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.white.opacity(0.32)))
                 }
             }
             .frame(maxWidth: 175, alignment: .leading)
